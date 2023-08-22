@@ -1,92 +1,45 @@
-// const url = 'http://www.t-es-t.hu/download/avix/avix_v05.pdf';
-const url = 'http://alphaolomi.me/pdf.js/docs/pdf.pdf';
+// If absolute URL from the remote server is provided, configure the CORS
+// header on that server.
+// var url = 'https://raw.githubusercontent.com/mozilla/pdf.js/ba2edeae/examples/learning/helloworld.pdf';
+const url = 'http://localhost:3000/docs/pdf.pdf';
 
-let pdfDoc = null,
-  pageNum = 1,
-  pageIsRendering = false,
-  pageNumIsPending = null;
+// Loaded via <script> tag, create shortcut to access PDF.js exports.
+var pdfjsLib = window['pdfjs-dist/build/pdf'];
 
-const scale = 1.5,
-  canvas = document.querySelector('#pdf-render'),
-  ctx = canvas.getContext('2d');
+// The workerSrc property shall be specified.
+pdfjsLib.GlobalWorkerOptions.workerSrc = '//mozilla.github.io/pdf.js/build/pdf.worker.js';
 
-// Render the page
-const renderPage = num => {
-  pageIsRendering = true;
+// Asynchronous download of PDF
+var loadingTask = pdfjsLib.getDocument(url);
+loadingTask.promise.then(function(pdf) {
+  console.log('PDF loaded');
+  
+  // Fetch the first page
+  var pageNumber = 1;
+  pdf.getPage(pageNumber).then(function(page) {
+    console.log('Page loaded');
+    const ZOOM_SCALE = 1.5;
+    const NORMAL_SCALE = 1;
+    var scale = NORMAL_SCALE;
+    var viewport = page.getViewport({scale: scale});
 
-  // Get page
-  pdfDoc.getPage(num).then(page => {
-    // Set scale
-    const viewport = page.getViewport({ scale });
+    // Prepare canvas using PDF page dimensions
+    var canvas = document.getElementById('the-canvas');
+    var context = canvas.getContext('2d');
     canvas.height = viewport.height;
     canvas.width = viewport.width;
 
-    const renderCtx = {
-      canvasContext: ctx,
-      viewport
+    // Render PDF page into canvas context
+    var renderContext = {
+      canvasContext: context,
+      viewport: viewport
     };
-
-    page.render(renderCtx).promise.then(() => {
-      pageIsRendering = false;
-
-      if (pageNumIsPending !== null) {
-        renderPage(pageNumIsPending);
-        pageNumIsPending = null;
-      }
+    var renderTask = page.render(renderContext);
+    renderTask.promise.then(function () {
+      console.log('Page rendered');
     });
-
-    // Output current page
-    document.querySelector('#page-num').textContent = num;
   });
-};
-
-// Check for pages rendering
-const queueRenderPage = num => {
-  if (pageIsRendering) {
-    pageNumIsPending = num;
-  } else {
-    renderPage(num);
-  }
-};
-
-// Show Prev Page
-const showPrevPage = () => {
-  if (pageNum <= 1) {
-    return;
-  }
-  pageNum--;
-  queueRenderPage(pageNum);
-};
-
-// Show Next Page
-const showNextPage = () => {
-  if (pageNum >= pdfDoc.numPages) {
-    return;
-  }
-  pageNum++;
-  queueRenderPage(pageNum);
-};
-
-// Get Document
-pdfjsLib
-  .getDocument(url)
-  .promise.then(pdfDoc_ => {
-    pdfDoc = pdfDoc_;
-
-    document.querySelector('#page-count').textContent = pdfDoc.numPages;
-
-    renderPage(pageNum);
-  })
-  .catch(err => {
-    // Display error
-    const div = document.createElement('div');
-    div.className = 'error';
-    div.appendChild(document.createTextNode(err.message));
-    document.querySelector('body').insertBefore(div, canvas);
-    // Remove top bar
-    document.querySelector('.top-bar').style.display = 'none';
-  });
-
-// Button Events
-document.querySelector('#prev-page').addEventListener('click', showPrevPage);
-document.querySelector('#next-page').addEventListener('click', showNextPage);
+}, function (reason) {
+  // PDF loading error
+  console.error(reason);
+});
